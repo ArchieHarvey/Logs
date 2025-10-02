@@ -7,6 +7,8 @@ const {
   Client,
   Collection,
   GatewayIntentBits,
+  REST,
+  Routes,
 } = require('discord.js');
 
 const logger = require('./util/logger');
@@ -48,9 +50,10 @@ class Bot extends EventEmitter {
     this.registerClientEvents();
 
     this.client.mongoService = this.mongoService;
+    this.client.reloadSlashCommands = this.reloadSlashCommands.bind(this);
   }
 
-  loadCommands() {
+  refreshCommandCollections() {
     const textPath = path.join(__dirname, 'commands', 'text');
     const slashPath = path.join(__dirname, 'commands', 'slash');
 
@@ -68,6 +71,35 @@ class Bot extends EventEmitter {
     }
 
     logger.info(`Loaded ${this.textCommands.size} text commands and ${this.slashCommands.size} slash commands.`);
+
+    return { slashCommands };
+  }
+
+  loadCommands() {
+    return this.refreshCommandCollections();
+  }
+
+  async reloadSlashCommands({ guildOnly = true } = {}) {
+    const { slashCommands } = this.refreshCommandCollections();
+
+    if (!this.config.token || !this.config.clientId) {
+      throw new Error('BOT_TOKEN and CLIENT_ID must be configured to reload slash commands.');
+    }
+
+    const rest = new REST({ version: '10' }).setToken(this.config.token);
+    const payload = slashCommands.map((command) => command.data.toJSON());
+
+    if (guildOnly) {
+      if (!this.config.guildId) {
+        throw new Error('GUILD_ID must be configured to reload guild commands.');
+      }
+
+      await rest.put(Routes.applicationGuildCommands(this.config.clientId, this.config.guildId), { body: payload });
+    } else {
+      await rest.put(Routes.applicationCommands(this.config.clientId), { body: payload });
+    }
+
+    return { count: payload.length, scope: guildOnly ? 'guild' : 'global' };
   }
 
   registerClientEvents() {
@@ -75,7 +107,12 @@ class Bot extends EventEmitter {
     const messageHandler = require('./events/messageCreate');
     const interactionHandler = require('./events/interactionCreate');
 
-    readyHandler({ client: this.client, logger, slashCommands: Array.from(this.slashCommands.values()) });
+    readyHandler({
+      client: this.client,
+      logger,
+      slashCommands: Array.from(this.slashCommands.values()),
+      mongoService: this.mongoService,
+    });
     messageHandler({
       client: this.client,
       logger,
@@ -136,6 +173,18 @@ class Bot extends EventEmitter {
         const behindCount = status.behind ?? 0;
         const commitLabel = behindCount === 1 ? 'commit' : 'commits';
 
+        const commitSummaries = await this.gitMonitor.getPendingCommitSummaries(status);
+
+        const pendingChangesField = commitSummaries.length
+          ? {
+              name: 'Pending Changes',
+              value: commitSummaries.join('\n'),
+            }
+          : {
+              name: 'Pending Changes',
+              value: 'Unable to load commit summaries.',
+            };
+
         const notificationEmbed = createEmbed({
           title: 'Repository Update Available',
           color: 0x1f6feb,
@@ -159,13 +208,7 @@ class Bot extends EventEmitter {
               value: status.tracking || 'Not configured',
               inline: true,
             },
-            {
-              name: 'Available Actions',
-              value: [
-                '• **Apply Update & Restart** – Pulls the latest changes, pushes them upstream, and restarts the bot.',
-                '• **Dismiss** – Acknowledges this notice until new remote commits are detected.',
-              ].join('\n'),
-            },
+            pendingChangesField,
           ],
         });
 
@@ -187,7 +230,7 @@ class Bot extends EventEmitter {
       logger.error('Failed to connect to MongoDB during startup:', error);
     }
 
-    this.client.once('clientReady', () => {
+    this.client.once('ready', () => {
       if (this.config.updateChannelId) {
         this.gitMonitor.start();
       } else {
