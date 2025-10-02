@@ -1,7 +1,7 @@
 const { fetchStoredPresence, applyPresence, buildPresenceDescription } = require('../commands/common/presence');
 
 module.exports = ({ client, logger, slashCommands, mongoService }) => {
-  client.once('ready', async () => {
+  client.once('clientReady', async () => {
     logger.info(`Logged in as ${client.user.tag}`);
     logger.info(`Loaded ${slashCommands.length} slash commands.`);
 
