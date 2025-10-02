@@ -9,6 +9,7 @@ This project provides a Discord bot written in JavaScript (Node.js) that support
 - **Unified help menu** accessible via both `!help` and `/help` for discovering bot commands.
 - **GitHub update monitor** that checks for new commits on the upstream branch and announces them in a fixed channel.
 - **One-click updates**: authorised users can confirm the update via a button, triggering `git pull`, `git push`, and a clean restart of the bot worker.
+- **MongoDB integration** with a reusable connection service and owner-only command to audit database health.
 - **Structured codebase** with clear separation of configuration, commands, events, services, and utilities.
 
 ## Getting started
@@ -43,6 +44,8 @@ This project provides a Discord bot written in JavaScript (Node.js) that support
    - `UPDATE_CHANNEL_ID`: Channel ID that should receive Git update notifications.
    - `COMMAND_PREFIX`: Prefix for text commands (defaults to `!`).
    - `GIT_POLL_INTERVAL_MINUTES`: How often to poll for remote changes (defaults to 5 minutes).
+   - `MONGODB_URI`: (Optional) MongoDB connection string used by the bot's database service.
+   - `BOT_OWNER_IDS`: Comma-separated Discord user IDs that should have access to owner-only commands (e.g. `/mongostats`).
 
 4. Deploy slash commands (run again whenever slash commands change):
 
@@ -79,6 +82,12 @@ src/
 3. A user with the **Manage Server** permission can click the button to execute the update.
 4. The bot runs `git pull` followed by `git push`. On success, the confirmation message is updated and the bot restarts automatically via the supervisor (`src/index.js`).
 
+## MongoDB monitoring
+
+- Provide a MongoDB connection string via `MONGODB_URI` to enable the built-in database service.
+- Populate `BOT_OWNER_IDS` with the Discord user IDs that should have access to owner tooling.
+- Use the `/mongostats` slash command (owner-only) to verify connectivity, latency, and basic database metrics at runtime.
+
 ## Adding commands
 
 - **Text commands**: add a new file to `src/bot/commands/text`. Export an object with `name`, `description`, and `execute`.
@@ -94,6 +103,7 @@ src/
 | `/help` | Slash | Display the unified help menu with all commands. |
 | `/ping` | Slash | Check the bot's responsiveness and latency. |
 | `/gitstatus` | Slash | Show the current Git status and pending updates. |
+| `/mongostats` | Slash | Owner-only command that validates MongoDB connectivity and displays database metrics. |
 
 ## License
 
