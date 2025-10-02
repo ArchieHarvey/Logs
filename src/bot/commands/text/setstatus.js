@@ -41,8 +41,12 @@ function formatRelativeTimestamp(timestampMs) {
   return `<t:${seconds}:R>`;
 }
 
-function buildPresenceEmbed(presence, { expiresAt, expired = false } = {}) {
+function buildPresenceEmbed(presence, { expiresAt, expired = false, notice } = {}) {
   const descriptionParts = [buildPresenceDescription(presence)];
+
+  if (notice) {
+    descriptionParts.push(notice);
+  }
 
   if (expiresAt) {
     const relative = formatRelativeTimestamp(expiresAt);
@@ -149,6 +153,28 @@ module.exports = {
     let activeMenu = null;
     let textCollector = null;
     let activePrompt = null;
+    let statusNotice = null;
+    const buildMainMessagePayload = ({ expired = false } = {}) => {
+      const components = [buildControlButtons()];
+
+      if (activeMenu === CUSTOM_IDS.STATUS_SELECT) {
+        components.push(buildStatusSelect(currentPresence.status));
+      } else if (activeMenu === CUSTOM_IDS.ACTIVITY_SELECT) {
+        components.push(buildActivityTypeSelect(currentPresence.activityType));
+      }
+
+      return {
+        embeds: [
+          buildPresenceEmbed(currentPresence, {
+            expiresAt: sessionExpiresAt,
+            expired,
+            notice: statusNotice,
+          }),
+        ],
+        components,
+      };
+    };
+
     const collector = responseMessage.createMessageComponentCollector({
       time: SESSION_TIMEOUT_MS,
       filter: (interaction) => interaction.user.id === message.author.id && isOwner(interaction.user.id),
@@ -172,31 +198,28 @@ module.exports = {
 
       await responseMessage
         .edit({
-          embeds: [buildPresenceEmbed(currentPresence, { expiresAt: sessionExpiresAt, expired: true })],
+          embeds: [
+            buildPresenceEmbed(currentPresence, {
+              expiresAt: sessionExpiresAt,
+              expired: true,
+              notice: statusNotice,
+            }),
+          ],
           components: [disabledButtons],
         })
         .catch(() => {});
     });
 
-    const refreshMessage = async () => {
+    const refreshMessage = async ({ notice } = {}) => {
+      if (notice !== undefined) {
+        statusNotice = notice;
+      }
+
       if (!responseMessage.editable) {
         return;
       }
 
-      const components = [buildControlButtons()];
-
-      if (activeMenu === CUSTOM_IDS.STATUS_SELECT) {
-        components.push(buildStatusSelect(currentPresence.status));
-      } else if (activeMenu === CUSTOM_IDS.ACTIVITY_SELECT) {
-        components.push(buildActivityTypeSelect(currentPresence.activityType));
-      }
-
-      await responseMessage
-        .edit({
-          embeds: [buildPresenceEmbed(currentPresence, { expiresAt: sessionExpiresAt })],
-          components,
-        })
-        .catch(() => {});
+      await responseMessage.edit(buildMainMessagePayload()).catch(() => {});
     };
 
     const persistPresence = async (nextPresence) => {
@@ -234,29 +257,13 @@ module.exports = {
       try {
         if (interaction.customId === CUSTOM_IDS.STATUS_BUTTON) {
           activeMenu = activeMenu === CUSTOM_IDS.STATUS_SELECT ? null : CUSTOM_IDS.STATUS_SELECT;
-          const components = [buildControlButtons()];
-          if (activeMenu === CUSTOM_IDS.STATUS_SELECT) {
-            components.push(buildStatusSelect(currentPresence.status));
-          }
-
-          await interaction.update({
-            embeds: [buildPresenceEmbed(currentPresence, { expiresAt: sessionExpiresAt })],
-            components,
-          });
+          await interaction.update(buildMainMessagePayload());
           return;
         }
 
         if (interaction.customId === CUSTOM_IDS.ACTIVITY_BUTTON) {
           activeMenu = activeMenu === CUSTOM_IDS.ACTIVITY_SELECT ? null : CUSTOM_IDS.ACTIVITY_SELECT;
-          const components = [buildControlButtons()];
-          if (activeMenu === CUSTOM_IDS.ACTIVITY_SELECT) {
-            components.push(buildActivityTypeSelect(currentPresence.activityType));
-          }
-
-          await interaction.update({
-            embeds: [buildPresenceEmbed(currentPresence, { expiresAt: sessionExpiresAt })],
-            components,
-          });
+          await interaction.update(buildMainMessagePayload());
           return;
         }
 
@@ -279,10 +286,7 @@ module.exports = {
           }
 
           activeMenu = null;
-          await interaction.update({
-            embeds: [buildPresenceEmbed(currentPresence, { expiresAt: sessionExpiresAt })],
-            components: [buildControlButtons()],
-          });
+          await interaction.update(buildMainMessagePayload());
           return;
         }
 
@@ -305,10 +309,7 @@ module.exports = {
           }
 
           activeMenu = null;
-          await interaction.update({
-            embeds: [buildPresenceEmbed(currentPresence, { expiresAt: sessionExpiresAt })],
-            components: [buildControlButtons()],
-          });
+          await interaction.update(buildMainMessagePayload());
           return;
         }
 
@@ -324,20 +325,31 @@ module.exports = {
           const promptExpiresAt = Date.now() + ACTIVITY_TEXT_TIMEOUT_MS;
           const promptContext = { expiresAt: promptExpiresAt };
           activePrompt = promptContext;
+          statusNotice = null;
 
-          await sendEphemeralEmbed(
-            interaction,
-            {
-              title: 'Update Activity Text',
-              description: [
-                'Send the new activity text within the next 60 seconds.',
-                `This prompt will expire ${formatRelativeTimestamp(promptExpiresAt)}.`,
-                'Reply with **clear** to remove the activity or **cancel** to abort.',
-              ].join('\n\n'),
-              color: EMBED_COLORS.warning,
-            },
-            { followUp: true },
-          );
+          const promptDescription = [
+            'Send the new activity text within the next 60 seconds.',
+            `This prompt will expire ${formatRelativeTimestamp(promptExpiresAt)}.`,
+            'Reply with **clear** to remove the activity or **cancel** to abort.',
+            '',
+            '**Current Presence**',
+            buildPresenceDescription(currentPresence),
+            '',
+            `The management session will expire ${formatRelativeTimestamp(sessionExpiresAt)}.`,
+          ].join('\n');
+
+          await responseMessage
+            .edit({
+              embeds: [
+                buildEmbed({
+                  title: 'Update Activity Text',
+                  description: promptDescription,
+                  color: EMBED_COLORS.warning,
+                }),
+              ],
+              components: [buildControlButtons()],
+            })
+            .catch(() => {});
 
           const filter = (msg) => msg.author.id === message.author.id;
           textCollector = message.channel.createMessageCollector({
@@ -350,15 +362,7 @@ module.exports = {
             const submitted = msg.content.trim();
 
             if (!submitted || submitted.toLowerCase() === 'cancel') {
-              await sendEphemeralEmbed(
-                interaction,
-                {
-                  title: 'Activity Update Cancelled',
-                  description: 'No changes were applied to the activity.',
-                  color: EMBED_COLORS.neutral,
-                },
-                { followUp: true },
-              );
+              await refreshMessage({ notice: 'Activity update cancelled. No changes were applied.' });
               return;
             }
 
@@ -376,33 +380,14 @@ module.exports = {
 
             const result = await persistPresence(nextPresence);
             if (!result.success) {
-              await refreshMessage();
-              await sendEphemeralEmbed(
-                interaction,
-                {
-                  title: 'Activity Update Failed',
-                  description: result.error,
-                  color: EMBED_COLORS.danger,
-                },
-                { followUp: true },
-              );
+              await refreshMessage({ notice: `**Error:** ${result.error}` });
               return;
             }
 
-            await refreshMessage();
             const confirmation = result.updated
               ? 'The activity has been updated successfully.'
               : 'The activity remains unchanged.';
-
-            await sendEphemeralEmbed(
-              interaction,
-              {
-                title: result.updated ? 'Activity Updated' : 'Activity Unchanged',
-                description: confirmation,
-                color: result.updated ? EMBED_COLORS.success : EMBED_COLORS.neutral,
-              },
-              { followUp: true },
-            );
+            await refreshMessage({ notice: confirmation });
           });
 
           textCollector.on('end', async (collected, reason) => {
@@ -410,24 +395,18 @@ module.exports = {
               activePrompt = null;
             }
 
-            if (reason === 'replaced') {
+            if (reason === 'replaced' || reason === 'session-ended') {
               return;
             }
 
             textCollector = null;
 
             if (collected.size === 0) {
-              await sendEphemeralEmbed(
-                interaction,
-                {
-                  title: 'Activity Prompt Expired',
-                  description: `No activity text was received before the prompt expired ${formatRelativeTimestamp(
-                    promptContext.expiresAt,
-                  )}. The previous activity has been kept.`,
-                  color: EMBED_COLORS.danger,
-                },
-                { followUp: true },
-              );
+              await refreshMessage({
+                notice: `No activity text was received before the prompt expired ${formatRelativeTimestamp(
+                  promptContext.expiresAt,
+                )}. The previous activity has been kept.`,
+              });
             }
           });
 
