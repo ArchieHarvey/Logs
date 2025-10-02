@@ -65,6 +65,23 @@ class GitMonitor extends EventEmitter {
       throw error;
     }
   }
+
+  async getPendingCommitSummaries(status) {
+    const trackingRef = status?.tracking;
+    const currentRef = status?.current;
+
+    if (!trackingRef || !status || (status.behind ?? 0) === 0) {
+      return [];
+    }
+
+    try {
+      const log = await this.git.log({ from: currentRef || 'HEAD', to: trackingRef });
+      return log.all.map((entry) => `• ${entry.hash.slice(0, 7)} — ${entry.message}`).slice(0, 5);
+    } catch (error) {
+      this.logger.warn('Failed to load pending commit summaries:', error);
+      return [];
+    }
+  }
 }
 
 GitMonitor.UPDATE_CONFIRM_BUTTON_ID = UPDATE_CONFIRM_BUTTON_ID;

@@ -136,6 +136,18 @@ class Bot extends EventEmitter {
         const behindCount = status.behind ?? 0;
         const commitLabel = behindCount === 1 ? 'commit' : 'commits';
 
+        const commitSummaries = await this.gitMonitor.getPendingCommitSummaries(status);
+
+        const pendingChangesField = commitSummaries.length
+          ? {
+              name: 'Pending Changes',
+              value: commitSummaries.join('\n'),
+            }
+          : {
+              name: 'Pending Changes',
+              value: 'Unable to load commit summaries.',
+            };
+
         const notificationEmbed = createEmbed({
           title: 'Repository Update Available',
           color: 0x1f6feb,
@@ -159,13 +171,7 @@ class Bot extends EventEmitter {
               value: status.tracking || 'Not configured',
               inline: true,
             },
-            {
-              name: 'Available Actions',
-              value: [
-                '• **Apply Update & Restart** – Pulls the latest changes, pushes them upstream, and restarts the bot.',
-                '• **Dismiss** – Acknowledges this notice until new remote commits are detected.',
-              ].join('\n'),
-            },
+            pendingChangesField,
           ],
         });
 
