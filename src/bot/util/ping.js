@@ -1,9 +1,9 @@
 const { createEmbed } = require('./replies');
 
 const LATENCY_STATES = [
-  { max: 100, label: 'Low', description: 'All clear!', emoji: '🟢', color: 0x57f287 },
-  { max: 250, label: 'Moderate', description: 'A little warm, but still fine.', emoji: '🟡', color: 0xfee75c },
-  { max: Infinity, label: 'High', description: 'Things are running hot.', emoji: '🔴', color: 0xed4245 },
+  { max: 100, description: 'All clear!', color: 0x57f287 },
+  { max: 250, description: 'A little warm, but still fine.', color: 0xfee75c },
+  { max: Infinity, description: 'Things are running hot.', color: 0xed4245 },
 ];
 
 function resolveLatencyState(roundTrip, wsPing) {
@@ -25,17 +25,12 @@ function buildLatencyEmbed({ roundTrip, wsPing }) {
   const state = resolveLatencyState(roundTrip, wsPing);
 
   return createEmbed({
-    title: `${state.emoji} ${state.label} Latency`,
+    title: 'Latency Report',
     description: state.description,
     color: state.color,
     fields: [
       { name: 'Round Trip', value: formatLatency(roundTrip), inline: true },
       { name: 'WebSocket', value: formatLatency(wsPing), inline: true },
-      {
-        name: 'Status',
-        value: `${state.emoji} ${state.label}`,
-        inline: true,
-      },
     ],
   });
 }
