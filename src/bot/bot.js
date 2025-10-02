@@ -11,6 +11,7 @@ const {
 
 const logger = require('./util/logger');
 const GitMonitor = require('./services/gitMonitor');
+const MongoService = require('./services/mongoService');
 const { loadTextCommands, loadSlashCommands } = require('./loaders/commandLoader');
 const { createEmbed } = require('./util/replies');
 
@@ -39,10 +40,14 @@ class Bot extends EventEmitter {
       logger,
     });
 
+    this.mongoService = new MongoService({ uri: this.config.mongoUri, logger });
+
     this.pendingUpdateMessageId = null;
 
     this.registerGitEvents();
     this.registerClientEvents();
+
+    this.client.mongoService = this.mongoService;
   }
 
   loadCommands() {
@@ -176,6 +181,12 @@ class Bot extends EventEmitter {
   async start() {
     this.loadCommands();
 
+    try {
+      await this.mongoService.connect();
+    } catch (error) {
+      logger.error('Failed to connect to MongoDB during startup:', error);
+    }
+
     this.client.once('clientReady', () => {
       if (this.config.updateChannelId) {
         this.gitMonitor.start();
@@ -190,6 +201,9 @@ class Bot extends EventEmitter {
   async stop() {
     this.gitMonitor.stop();
     this.client.removeAllListeners();
+    await this.mongoService.disconnect().catch((error) => {
+      logger.warn('Failed to close MongoDB connection cleanly:', error);
+    });
     await this.client.destroy();
   }
 }

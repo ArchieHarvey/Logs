@@ -15,6 +15,11 @@ const config = {
   updateChannelId: process.env.UPDATE_CHANNEL_ID || '',
   commandPrefix: process.env.COMMAND_PREFIX || '!',
   gitPollIntervalMinutes: numberFromEnv(process.env.GIT_POLL_INTERVAL_MINUTES, 5),
+  mongoUri: process.env.MONGODB_URI || '',
+  ownerIds: (process.env.BOT_OWNER_IDS || '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0),
 };
 
 module.exports = config;
