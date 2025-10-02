@@ -7,6 +7,8 @@ const {
 } = require('discord.js');
 const { createEmbed } = require('../util/replies');
 const GitMonitor = require('../services/gitMonitor');
+const { GUILD_RELOAD_BUTTON_ID, GLOBAL_RELOAD_BUTTON_ID } = require('../commands/common/reloadCommands');
+const { isOwner } = require('../util/owners');
 
 function disableInteractionButtons(message) {
   if (!message?.components?.length) {
@@ -60,6 +62,84 @@ module.exports = ({ client, logger, slashCommands, gitMonitor, requestRestart, u
     }
 
     if (!interaction.isButton()) {
+      return;
+    }
+
+    if (interaction.customId === GUILD_RELOAD_BUTTON_ID) {
+      if (!isOwner(interaction.user.id)) {
+        await interaction.reply({
+          content: 'Only bot owners can reload slash commands.',
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (typeof interaction.client.reloadSlashCommands !== 'function') {
+        await interaction.reply({
+          embeds: [
+            createEmbed({
+              title: 'Reload unavailable',
+              description: 'The bot is not configured to reload commands automatically.',
+              color: 0xed4245,
+            }),
+          ],
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+      try {
+        const { count } = await interaction.client.reloadSlashCommands({ guildOnly: true });
+        await interaction.editReply({
+          embeds: [
+            createEmbed({
+              title: 'Slash commands reloaded',
+              description: `Reloaded **${count}** slash ${count === 1 ? 'command' : 'commands'} for this guild.`,
+              color: 0x3ba55d,
+            }),
+          ],
+        });
+
+        const disabledComponents = disableInteractionButtons(interaction.message);
+        if (disabledComponents) {
+          try {
+            await interaction.message.edit({
+              embeds: [
+                createEmbed({
+                  title: 'Reload complete',
+                  description: `Guild slash commands reloaded by **${interaction.user.tag}**.`,
+                  color: 0x3ba55d,
+                }),
+              ],
+              components: disabledComponents,
+            });
+          } catch (error) {
+            logger.warn('Failed to update reload command message:', error);
+          }
+        }
+      } catch (error) {
+        logger.error('Failed to reload slash commands:', error);
+        await interaction.editReply({
+          embeds: [
+            createEmbed({
+              title: 'Reload failed',
+              description: `Unable to reload slash commands: ${error.message}`,
+              color: 0xed4245,
+            }),
+          ],
+        });
+      }
+
+      return;
+    }
+
+    if (interaction.customId === GLOBAL_RELOAD_BUTTON_ID) {
+      await interaction.reply({
+        content: 'Global reloads are currently disabled.',
+        flags: MessageFlags.Ephemeral,
+      });
       return;
     }
 
