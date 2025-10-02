@@ -1,13 +1,16 @@
+const { replyWithEmbed } = require('../../util/replies');
+const { buildHelpEmbed } = require('../../util/help');
+
 module.exports = {
   name: 'help',
-  description: 'List available text commands.',
-  async execute({ message, textCommands, prefix }) {
-    const commandList = Array.from(textCommands.values())
-      .map((command) => `${prefix}${command.name} - ${command.description || 'No description provided.'}`)
-      .join('\n');
-
-    await message.reply({
-      content: commandList || 'No commands are currently available.',
+  description: 'Show available commands and how to use them.',
+  async execute({ message, textCommands, prefix, client }) {
+    const embed = buildHelpEmbed({
+      prefix,
+      textCommands,
+      slashCommands: client?.slashCommands,
     });
+
+    await replyWithEmbed(message, embed);
   },
 };

@@ -12,6 +12,7 @@ const {
 const logger = require('./util/logger');
 const GitMonitor = require('./services/gitMonitor');
 const { loadTextCommands, loadSlashCommands } = require('./loaders/commandLoader');
+const { createEmbed } = require('./util/replies');
 
 class Bot extends EventEmitter {
   constructor(config) {
@@ -27,6 +28,10 @@ class Bot extends EventEmitter {
 
     this.textCommands = new Collection();
     this.slashCommands = new Collection();
+
+    this.client.commandPrefix = this.config.commandPrefix;
+    this.client.textCommands = this.textCommands;
+    this.client.slashCommands = this.slashCommands;
 
     this.gitMonitor = new GitMonitor({
       repoPath: process.cwd(),
@@ -115,13 +120,15 @@ class Bot extends EventEmitter {
 
         const row = new ActionRowBuilder().addComponents(button);
 
-        const content = [
-          '🚨 **Repository update detected!**',
-          `The bot is ${status.behind} commit(s) behind the upstream branch.`,
-          'Click the button below to pull the latest changes, push them upstream, and restart the bot.',
-        ].join('\n');
+        const notificationEmbed = createEmbed({
+          title: '🚨 Repository update detected!',
+          description: [
+            `The bot is **${status.behind}** commit(s) behind the upstream branch.`,
+            'Click the button below to pull the latest changes, push them upstream, and restart the bot.',
+          ].join('\n'),
+        });
 
-        const message = await channel.send({ content, components: [row] });
+        const message = await channel.send({ embeds: [notificationEmbed], components: [row] });
         this.pendingUpdateMessageId = message.id;
         logger.info(`Update notification sent to channel ${channel.id}.`);
       } catch (error) {

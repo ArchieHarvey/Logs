@@ -1,4 +1,5 @@
 const { PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { createEmbed } = require('../util/replies');
 const GitMonitor = require('../services/gitMonitor');
 
 module.exports = ({ client, logger, slashCommands, gitMonitor, requestRestart, updateChannelId }) => {
@@ -13,7 +14,11 @@ module.exports = ({ client, logger, slashCommands, gitMonitor, requestRestart, u
         await command.execute(interaction);
       } catch (error) {
         logger.error(`Error executing slash command ${interaction.commandName}:`, error);
-        const replyContent = { content: 'There was an error while executing this command.', ephemeral: true };
+        const errorEmbed = createEmbed({
+          title: 'Command error',
+          description: 'There was an error while executing this command.',
+        });
+        const replyContent = { embeds: [errorEmbed], ephemeral: true };
 
         if (interaction.replied || interaction.deferred) {
           await interaction.followUp(replyContent);
@@ -30,8 +35,13 @@ module.exports = ({ client, logger, slashCommands, gitMonitor, requestRestart, u
       }
 
       if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+        const permissionEmbed = createEmbed({
+          title: 'Permission required',
+          description: 'You need the **Manage Server** permission to confirm updates.',
+        });
+
         await interaction.reply({
-          content: 'You need the **Manage Server** permission to confirm updates.',
+          embeds: [permissionEmbed],
           ephemeral: true,
         });
         return;
@@ -44,8 +54,13 @@ module.exports = ({ client, logger, slashCommands, gitMonitor, requestRestart, u
         const changeCount = pullResult?.summary?.changes ?? 0;
         const pushStatus = pushResult?.pushed?.length ? 'pushed' : 'up-to-date';
 
+        const successEmbed = createEmbed({
+          title: 'Update applied',
+          description: `Pull complete (**${changeCount}** changes). Push status: **${pushStatus}**. Restarting...`,
+        });
+
         await interaction.editReply({
-          content: `Pull complete (${changeCount} changes). Push status: ${pushStatus}. Restarting...`,
+          embeds: [successEmbed],
         });
 
         if (interaction.message?.components?.length) {
@@ -65,8 +80,13 @@ module.exports = ({ client, logger, slashCommands, gitMonitor, requestRestart, u
         requestRestart();
       } catch (error) {
         logger.error('Failed to apply git updates:', error);
+        const failureEmbed = createEmbed({
+          title: 'Update failed',
+          description: `Failed to update: ${error.message}`,
+        });
+
         await interaction.editReply({
-          content: `Failed to update: ${error.message}`,
+          embeds: [failureEmbed],
         });
       }
     }

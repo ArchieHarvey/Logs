@@ -1,3 +1,5 @@
+const { createEmbed, replyWithEmbed } = require('../util/replies');
+
 module.exports = ({ client, logger, textCommands, prefix }) => {
   client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.content.startsWith(prefix)) {
@@ -22,9 +24,12 @@ module.exports = ({ client, logger, textCommands, prefix }) => {
     } catch (error) {
       logger.error(`Error executing text command ${commandName}:`, error);
       if (message.channel) {
-        await message.reply({
-          content: 'There was an error while executing that command.',
+        const errorEmbed = createEmbed({
+          title: 'Command error',
+          description: 'There was an error while executing that command.',
         });
+
+        await replyWithEmbed(message, errorEmbed);
       }
     }
   });

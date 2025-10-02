@@ -6,6 +6,7 @@ This project provides a Discord bot written in JavaScript (Node.js) that support
 
 - **Text commands** with a configurable prefix (default: `!`).
 - **Slash commands** powered by Discord's interactions API.
+- **Unified help menu** accessible via both `!help` and `/help` for discovering bot commands.
 - **GitHub update monitor** that checks for new commits on the upstream branch and announces them in a fixed channel.
 - **One-click updates**: authorised users can confirm the update via a button, triggering `git pull`, `git push`, and a clean restart of the bot worker.
 - **Structured codebase** with clear separation of configuration, commands, events, services, and utilities.
@@ -65,7 +66,7 @@ src/
 │   ├── events/               # Discord event bindings
 │   ├── loaders/              # Helpers for loading commands
 │   ├── services/             # Git monitoring service
-│   └── util/                 # Logger utility
+│   └── util/                 # Shared helpers for embeds, logging, and help menus
 ├── config/                   # Environment configuration loader
 ├── index.js                  # Supervisor that restarts the worker on demand
 └── worker.js                 # Actual bot worker process
@@ -83,6 +84,16 @@ src/
 - **Text commands**: add a new file to `src/bot/commands/text`. Export an object with `name`, `description`, and `execute`.
 - **Slash commands**: add a new file to `src/bot/commands/slash`. Export an object with `data` (a `SlashCommandBuilder`) and `execute`.
 - After modifying slash commands, run `npm run deploy:commands`.
+
+### Default commands
+
+| Command | Type  | Description |
+|---------|-------|-------------|
+| `!help` | Text  | Display the unified help menu with all commands. |
+| `!ping` | Text  | Check the bot's responsiveness. |
+| `/help` | Slash | Display the unified help menu with all commands. |
+| `/ping` | Slash | Check the bot's responsiveness and latency. |
+| `/gitstatus` | Slash | Show the current Git status and pending updates. |
 
 ## License
 
