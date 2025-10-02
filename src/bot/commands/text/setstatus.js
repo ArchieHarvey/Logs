@@ -1,35 +1,91 @@
-const { ActivityType } = require('discord.js');
-const { replyWithEmbed } = require('../../util/replies');
+const {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ComponentType,
+  StringSelectMenuBuilder,
+} = require('discord.js');
+const { createEmbed, replyWithEmbed } = require('../../util/replies');
 const { isOwner } = require('../../util/owners');
+const {
+  PRESENCE_STATUSES,
+  ACTIVITY_TYPES,
+  buildPresenceDescription,
+  getPresenceFromClient,
+  normalizePresence,
+  applyPresence,
+  savePresence,
+} = require('../common/presence');
 
-const VALID_STATUSES = new Map([
-  ['online', 'online'],
-  ['idle', 'idle'],
-  ['dnd', 'dnd'],
-  ['do-not-disturb', 'dnd'],
-  ['invisible', 'invisible'],
-]);
+const CUSTOM_IDS = {
+  STATUS_BUTTON: 'setstatus:status-button',
+  STATUS_SELECT: 'setstatus:status-select',
+  ACTIVITY_BUTTON: 'setstatus:activity-button',
+  ACTIVITY_SELECT: 'setstatus:activity-select',
+  TEXT_BUTTON: 'setstatus:text-button',
+};
 
-const ACTIVITY_TYPES = new Map([
-  ['playing', ActivityType.Playing],
-  ['listening', ActivityType.Listening],
-  ['watching', ActivityType.Watching],
-  ['competing', ActivityType.Competing],
-]);
+const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
+const ACTIVITY_TEXT_TIMEOUT_MS = 60 * 1000;
 
-function buildUsage(prefix) {
-  return [
-    `Usage: \`${prefix}setstatus <status> [activity] [message]\``,
-    'Statuses: online, idle, dnd, invisible',
-    'Activities: playing, listening, watching, competing',
-    'Example: `setstatus dnd playing Maintaining the server`',
-  ].join('\n');
+function buildControlButtons() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(CUSTOM_IDS.STATUS_BUTTON)
+      .setLabel('Status')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(CUSTOM_IDS.ACTIVITY_BUTTON)
+      .setLabel('Activity Type')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(CUSTOM_IDS.TEXT_BUTTON)
+      .setLabel('Activity Text')
+      .setStyle(ButtonStyle.Secondary),
+  );
+}
+
+function buildStatusSelect(currentStatus) {
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(CUSTOM_IDS.STATUS_SELECT)
+      .setPlaceholder('Select a status')
+      .addOptions(
+        PRESENCE_STATUSES.map(({ name, value }) => ({
+          label: name,
+          value,
+          default: value === currentStatus,
+        })),
+      ),
+  );
+}
+
+function buildActivityTypeSelect(currentType) {
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(CUSTOM_IDS.ACTIVITY_SELECT)
+      .setPlaceholder('Select an activity type')
+      .addOptions(
+        ACTIVITY_TYPES.map(({ name, value }) => ({
+          label: name,
+          value,
+          default: value === currentType,
+        })),
+      ),
+  );
+}
+
+function buildPresenceEmbed(presence) {
+  return createEmbed({
+    title: 'Manage Bot Presence',
+    description: buildPresenceDescription(presence),
+  });
 }
 
 module.exports = {
   name: 'setstatus',
-  description: 'Update the bot\'s status and activity.',
-  async execute({ message, args, prefix }) {
+  description: 'Interactively update the bot\'s presence.',
+  async execute({ message }) {
     if (!isOwner(message.author.id)) {
       await replyWithEmbed(message, {
         title: 'Owner only',
@@ -39,71 +95,238 @@ module.exports = {
       return;
     }
 
-    if (!args.length) {
-      await replyWithEmbed(message, {
-        title: 'Set status',
-        description: buildUsage(prefix),
+    const mongoService = message.client.mongoService;
+    let currentPresence = normalizePresence(getPresenceFromClient(message.client));
+
+    const responseMessage = await replyWithEmbed(
+      message,
+      buildPresenceEmbed(currentPresence),
+      { components: [buildControlButtons()] },
+    );
+
+    let activeMenu = null;
+    let textCollector = null;
+    const collector = responseMessage.createMessageComponentCollector({
+      time: SESSION_TIMEOUT_MS,
+      filter: (interaction) => interaction.user.id === message.author.id && isOwner(interaction.user.id),
+    });
+
+    collector.on('end', async () => {
+      if (!responseMessage.editable) {
+        return;
+      }
+
+      const baseRow = buildControlButtons();
+      const disabledButtons = new ActionRowBuilder().addComponents(
+        ...baseRow.components.map((component) => ButtonBuilder.from(component).setDisabled(true)),
+      );
+
+      await responseMessage.edit({ components: [disabledButtons] }).catch(() => {});
+    });
+
+    const refreshMessage = async () => {
+      if (!responseMessage.editable) {
+        return;
+      }
+
+      const components = [buildControlButtons()];
+
+      if (activeMenu === CUSTOM_IDS.STATUS_SELECT) {
+        components.push(buildStatusSelect(currentPresence.status));
+      } else if (activeMenu === CUSTOM_IDS.ACTIVITY_SELECT) {
+        components.push(buildActivityTypeSelect(currentPresence.activityType));
+      }
+
+      await responseMessage.edit({
+        embeds: [buildPresenceEmbed(currentPresence)],
+        components,
       });
-      return;
-    }
+    };
 
-    const statusArg = args.shift().toLowerCase();
-    const resolvedStatus = VALID_STATUSES.get(statusArg);
+    const persistPresence = async (nextPresence) => {
+      if (
+        nextPresence.status === currentPresence.status &&
+        nextPresence.activityType === currentPresence.activityType &&
+        nextPresence.activityText === currentPresence.activityText
+      ) {
+        return { success: true, updated: false };
+      }
 
-    if (!resolvedStatus) {
-      await replyWithEmbed(message, {
-        title: 'Invalid status',
-        description: buildUsage(prefix),
-        color: 0xed4245,
-      });
-      return;
-    }
+      const previousPresence = currentPresence;
 
-    let activityTypeArg = args.length > 0 ? args[0].toLowerCase() : null;
-    let activityText = '';
+      try {
+        await applyPresence(message.client, nextPresence);
+      } catch (error) {
+        return { success: false, error: `Failed to update Discord presence: ${error.message}` };
+      }
 
-    if (activityTypeArg && ACTIVITY_TYPES.has(activityTypeArg)) {
-      args.shift();
-      activityText = args.join(' ').trim();
-    } else {
-      activityText = [activityTypeArg, ...args.slice(1)].filter(Boolean).join(' ').trim();
-      activityTypeArg = null;
-    }
+      try {
+        await savePresence(mongoService, nextPresence);
+      } catch (error) {
+        await applyPresence(message.client, previousPresence).catch(() => {});
+        return {
+          success: false,
+          error: `Unable to persist the change; the previous presence was restored: ${error.message}`,
+        };
+      }
 
-    const activities = [];
+      currentPresence = normalizePresence(nextPresence);
+      return { success: true, updated: true };
+    };
 
-    if (activityText) {
-      const resolvedActivity = ACTIVITY_TYPES.get(activityTypeArg) || ActivityType.Playing;
-      activities.push({ name: activityText, type: resolvedActivity });
-    }
+    collector.on('collect', async (interaction) => {
+      try {
+        if (interaction.customId === CUSTOM_IDS.STATUS_BUTTON) {
+          activeMenu = activeMenu === CUSTOM_IDS.STATUS_SELECT ? null : CUSTOM_IDS.STATUS_SELECT;
+          const components = [buildControlButtons()];
+          if (activeMenu === CUSTOM_IDS.STATUS_SELECT) {
+            components.push(buildStatusSelect(currentPresence.status));
+          }
 
-    try {
-      await message.client.user.setPresence({
-        status: resolvedStatus,
-        activities,
-      });
-    } catch (error) {
-      await replyWithEmbed(message, {
-        title: 'Status update failed',
-        description: `Unable to update the bot status: ${error.message}`,
-        color: 0xed4245,
-      });
-      return;
-    }
+          await interaction.update({
+            embeds: [buildPresenceEmbed(currentPresence)],
+            components,
+          });
+          return;
+        }
 
-    const descriptionLines = [`Status set to **${resolvedStatus}**.`];
+        if (interaction.customId === CUSTOM_IDS.ACTIVITY_BUTTON) {
+          activeMenu = activeMenu === CUSTOM_IDS.ACTIVITY_SELECT ? null : CUSTOM_IDS.ACTIVITY_SELECT;
+          const components = [buildControlButtons()];
+          if (activeMenu === CUSTOM_IDS.ACTIVITY_SELECT) {
+            components.push(buildActivityTypeSelect(currentPresence.activityType));
+          }
 
-    if (activityText) {
-      const activityLabel = activityTypeArg ?? 'playing';
-      descriptionLines.push(`Activity set to **${activityLabel} ${activityText}**.`);
-    } else {
-      descriptionLines.push('Activity cleared.');
-    }
+          await interaction.update({
+            embeds: [buildPresenceEmbed(currentPresence)],
+            components,
+          });
+          return;
+        }
 
-    await replyWithEmbed(message, {
-      title: 'Status updated',
-      description: descriptionLines.join('\n'),
-      color: 0x3ba55d,
+        if (interaction.customId === CUSTOM_IDS.STATUS_SELECT && interaction.componentType === ComponentType.StringSelect) {
+          const selectedStatus = interaction.values[0];
+
+          const nextPresence = {
+            ...currentPresence,
+            status: selectedStatus,
+          };
+
+          const result = await persistPresence(nextPresence);
+          if (!result.success) {
+            await interaction.reply({ content: result.error, ephemeral: true }).catch(() => {});
+            return;
+          }
+
+          activeMenu = null;
+          await interaction.update({
+            embeds: [buildPresenceEmbed(currentPresence)],
+            components: [buildControlButtons()],
+          });
+          return;
+        }
+
+        if (interaction.customId === CUSTOM_IDS.ACTIVITY_SELECT && interaction.componentType === ComponentType.StringSelect) {
+          const selectedType = interaction.values[0];
+
+          const nextPresence = {
+            ...currentPresence,
+            activityType: selectedType,
+          };
+
+          const result = await persistPresence(nextPresence);
+          if (!result.success) {
+            await interaction.reply({ content: result.error, ephemeral: true }).catch(() => {});
+            return;
+          }
+
+          activeMenu = null;
+          await interaction.update({
+            embeds: [buildPresenceEmbed(currentPresence)],
+            components: [buildControlButtons()],
+          });
+          return;
+        }
+
+        if (interaction.customId === CUSTOM_IDS.TEXT_BUTTON) {
+          activeMenu = null;
+
+          if (textCollector) {
+            textCollector.stop('replaced');
+            textCollector = null;
+          }
+
+          await interaction.deferUpdate();
+          await interaction.followUp({
+            content:
+              'Send the new activity text within 60 seconds. Reply with `clear` to remove the activity or `cancel` to abort.',
+            ephemeral: true,
+          });
+
+          const filter = (msg) => msg.author.id === message.author.id;
+          textCollector = message.channel.createMessageCollector({ filter, time: ACTIVITY_TEXT_TIMEOUT_MS, max: 1 });
+
+          textCollector.on('collect', async (msg) => {
+            const submitted = msg.content.trim();
+
+            if (!submitted || submitted.toLowerCase() === 'cancel') {
+              await interaction.followUp({ content: 'Activity update cancelled.', ephemeral: true }).catch(() => {});
+              return;
+            }
+
+            const nextPresence = { ...currentPresence };
+
+            if (submitted.toLowerCase() === 'clear') {
+              nextPresence.activityText = '';
+              nextPresence.activityType = null;
+            } else {
+              nextPresence.activityText = submitted.slice(0, 128);
+              if (!nextPresence.activityType) {
+                nextPresence.activityType = 'playing';
+              }
+            }
+
+            const result = await persistPresence(nextPresence);
+            if (!result.success) {
+              await refreshMessage();
+              await interaction.followUp({ content: result.error, ephemeral: true }).catch(() => {});
+              return;
+            }
+
+            await refreshMessage();
+            const confirmation = result.updated ? 'Activity updated.' : 'Activity left unchanged.';
+            await interaction.followUp({ content: confirmation, ephemeral: true }).catch(() => {});
+          });
+
+          textCollector.on('end', async (collected, reason) => {
+            if (reason === 'replaced') {
+              return;
+            }
+
+            textCollector = null;
+
+            if (collected.size === 0) {
+              await interaction.followUp({
+                content: 'No activity text received in time; keeping the previous value.',
+                ephemeral: true,
+              }).catch(() => {});
+            }
+          });
+
+          return;
+        }
+      } catch (error) {
+        const payload = {
+          content: `Something went wrong: ${error.message}`,
+          ephemeral: true,
+        };
+
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp(payload).catch(() => {});
+        } else {
+          await interaction.reply(payload).catch(() => {});
+        }
+      }
     });
   },
 };

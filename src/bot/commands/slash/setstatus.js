@@ -1,25 +1,14 @@
-const { SlashCommandBuilder, MessageFlags, ActivityType } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { createEmbed } = require('../../util/replies');
 const { isOwner } = require('../../util/owners');
-
-const PRESENCE_STATUSES = [
-  { name: 'Online', value: 'online' },
-  { name: 'Idle', value: 'idle' },
-  { name: 'Do Not Disturb', value: 'dnd' },
-  { name: 'Invisible', value: 'invisible' },
-];
-
-const ACTIVITY_TYPES = [
-  { name: 'Playing', value: 'playing', type: ActivityType.Playing },
-  { name: 'Listening', value: 'listening', type: ActivityType.Listening },
-  { name: 'Watching', value: 'watching', type: ActivityType.Watching },
-  { name: 'Competing', value: 'competing', type: ActivityType.Competing },
-];
-
-const activityTypeMap = ACTIVITY_TYPES.reduce((map, activity) => {
-  map.set(activity.value, activity.type);
-  return map;
-}, new Map());
+const {
+  PRESENCE_STATUSES,
+  ACTIVITY_TYPES,
+  getPresenceFromClient,
+  normalizePresence,
+  applyPresence,
+  savePresence,
+} = require('../common/presence');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -54,22 +43,31 @@ module.exports = {
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const status = interaction.options.getString('status') ?? interaction.client?.user?.presence?.status ?? 'online';
-    const activityTypeValue = interaction.options.getString('activity_type');
-    const activityText = interaction.options.getString('activity_text')?.trim();
+    const mongoService = interaction.client.mongoService;
+    const currentPresence = normalizePresence(getPresenceFromClient(interaction.client));
 
-    const activities = [];
+    const statusInput = interaction.options.getString('status');
+    const activityTypeInput = interaction.options.getString('activity_type');
+    const activityTextInput = interaction.options.getString('activity_text');
 
-    if (activityText) {
-      const resolvedType = activityTypeValue ? activityTypeMap.get(activityTypeValue) : ActivityType.Playing;
-      activities.push({ name: activityText, type: resolvedType });
+    const nextPresence = {
+      status: statusInput ?? currentPresence.status,
+      activityType: activityTypeInput ?? currentPresence.activityType,
+      activityText: activityTextInput !== null ? activityTextInput?.trim() ?? '' : currentPresence.activityText,
+    };
+
+    if (activityTextInput !== null) {
+      if (!nextPresence.activityText) {
+        nextPresence.activityType = null;
+      } else if (!nextPresence.activityType) {
+        nextPresence.activityType = 'playing';
+      }
     }
 
+    const previousPresence = currentPresence;
+
     try {
-      await interaction.client.user.setPresence({
-        status,
-        activities,
-      });
+      await applyPresence(interaction.client, nextPresence);
     } catch (error) {
       const errorEmbed = createEmbed({
         title: 'Status update failed',
@@ -81,11 +79,26 @@ module.exports = {
       return;
     }
 
-    const descriptionLines = [`Status set to **${status}**.`];
+    try {
+      await savePresence(mongoService, nextPresence);
+    } catch (error) {
+      await applyPresence(interaction.client, previousPresence).catch(() => {});
 
-    if (activityText) {
-      const activityLabel = activityTypeValue ?? 'playing';
-      descriptionLines.push(`Activity set to **${activityLabel} ${activityText}**.`);
+      const errorEmbed = createEmbed({
+        title: 'Status update failed',
+        description: `Unable to persist the change, so the previous presence has been restored: ${error.message}`,
+        color: 0xed4245,
+      });
+
+      await interaction.editReply({ embeds: [errorEmbed] });
+      return;
+    }
+
+    const descriptionLines = [`Status set to **${nextPresence.status}**.`];
+
+    if (nextPresence.activityText) {
+      const activityLabel = nextPresence.activityType ?? 'playing';
+      descriptionLines.push(`Activity set to **${activityLabel} ${nextPresence.activityText}**.`);
     } else {
       descriptionLines.push('Activity cleared.');
     }

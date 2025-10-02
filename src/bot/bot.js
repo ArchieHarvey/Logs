@@ -107,7 +107,12 @@ class Bot extends EventEmitter {
     const messageHandler = require('./events/messageCreate');
     const interactionHandler = require('./events/interactionCreate');
 
-    readyHandler({ client: this.client, logger, slashCommands: Array.from(this.slashCommands.values()) });
+    readyHandler({
+      client: this.client,
+      logger,
+      slashCommands: Array.from(this.slashCommands.values()),
+      mongoService: this.mongoService,
+    });
     messageHandler({
       client: this.client,
       logger,
@@ -225,7 +230,7 @@ class Bot extends EventEmitter {
       logger.error('Failed to connect to MongoDB during startup:', error);
     }
 
-    this.client.once('clientReady', () => {
+    this.client.once('ready', () => {
       if (this.config.updateChannelId) {
         this.gitMonitor.start();
       } else {
