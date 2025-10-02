@@ -25,7 +25,7 @@ function buildLatencyEmbed({ roundTrip, wsPing }) {
   const state = resolveLatencyState(roundTrip, wsPing);
 
   return createEmbed({
-    title: `${state.emoji} ${state.label} Latency`,
+    title: 'Latency Results',
     description: state.description,
     color: state.color,
     fields: [
