@@ -140,7 +140,7 @@ class Bot extends EventEmitter {
   async start() {
     this.loadCommands();
 
-    this.client.once('ready', () => {
+    this.client.once('clientReady', () => {
       if (this.config.updateChannelId) {
         this.gitMonitor.start();
       } else {

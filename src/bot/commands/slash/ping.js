@@ -1,5 +1,6 @@
 const { SlashCommandBuilder } = require('discord.js');
 const { createEmbed } = require('../../util/replies');
+const { buildLatencyEmbed } = require('../../util/ping');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -11,8 +12,9 @@ module.exports = {
       fetchReply: true,
     });
     const latency = sent.createdTimestamp - interaction.createdTimestamp;
+    const wsPing = interaction.client?.ws?.ping;
     await interaction.editReply({
-      embeds: [createEmbed({ description: `Pong! Round-trip latency: **${latency}ms**.` })],
+      embeds: [buildLatencyEmbed({ roundTrip: latency, wsPing })],
     });
   },
 };

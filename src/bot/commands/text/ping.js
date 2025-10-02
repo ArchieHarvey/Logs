@@ -1,4 +1,5 @@
-const { createEmbed, replyWithEmbed } = require('../../util/replies');
+const { replyWithEmbed } = require('../../util/replies');
+const { buildLatencyEmbed } = require('../../util/ping');
 
 module.exports = {
   name: 'ping',
@@ -9,9 +10,8 @@ module.exports = {
     });
 
     const latency = sent.createdTimestamp - message.createdTimestamp;
-    const resultEmbed = createEmbed({
-      description: `Pong! Round-trip latency: **${latency}ms**.`,
-    });
+    const wsPing = message.client?.ws?.ping;
+    const resultEmbed = buildLatencyEmbed({ roundTrip: latency, wsPing });
 
     await sent.edit({ embeds: [resultEmbed] });
   },
