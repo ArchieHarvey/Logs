@@ -84,6 +84,9 @@ class Bot extends EventEmitter {
       gitMonitor: this.gitMonitor,
       requestRestart: () => this.emit('restartRequested'),
       updateChannelId: this.config.updateChannelId,
+      clearUpdatePrompt: () => {
+        this.pendingUpdateMessageId = null;
+      },
     });
   }
 
@@ -113,19 +116,54 @@ class Bot extends EventEmitter {
           this.pendingUpdateMessageId = null;
         }
 
-        const button = new ButtonBuilder()
-          .setCustomId(GitMonitor.UPDATE_BUTTON_ID)
-          .setLabel('Pull & Restart')
-          .setStyle(ButtonStyle.Primary);
+        const confirmButton = new ButtonBuilder()
+          .setCustomId(GitMonitor.UPDATE_CONFIRM_BUTTON_ID)
+          .setLabel('Apply Update & Restart')
+          .setEmoji('✅')
+          .setStyle(ButtonStyle.Success);
 
-        const row = new ActionRowBuilder().addComponents(button);
+        const declineButton = new ButtonBuilder()
+          .setCustomId(GitMonitor.UPDATE_DECLINE_BUTTON_ID)
+          .setLabel('Dismiss')
+          .setEmoji('🚫')
+          .setStyle(ButtonStyle.Secondary);
+
+        const row = new ActionRowBuilder().addComponents(confirmButton, declineButton);
+
+        const behindCount = status.behind ?? 0;
+        const commitLabel = behindCount === 1 ? 'commit' : 'commits';
 
         const notificationEmbed = createEmbed({
-          title: '🚨 Repository update detected!',
+          title: 'Repository Update Available',
+          color: 0x1f6feb,
           description: [
-            `The bot is **${status.behind}** commit(s) behind the upstream branch.`,
-            'Click the button below to pull the latest changes, push them upstream, and restart the bot.',
-          ].join('\n'),
+            'An update for the bot repository has been detected.',
+            'Review the summary below and choose how you would like to proceed.',
+          ].join('\n\n'),
+          fields: [
+            {
+              name: 'Behind',
+              value: `**${behindCount}** ${commitLabel}`,
+              inline: true,
+            },
+            {
+              name: 'Current Branch',
+              value: status.current || 'Unknown',
+              inline: true,
+            },
+            {
+              name: 'Upstream Tracking',
+              value: status.tracking || 'Not configured',
+              inline: true,
+            },
+            {
+              name: 'Available Actions',
+              value: [
+                '• **Apply Update & Restart** – Pulls the latest changes, pushes them upstream, and restarts the bot.',
+                '• **Dismiss** – Acknowledges this notice until new remote commits are detected.',
+              ].join('\n'),
+            },
+          ],
         });
 
         const message = await channel.send({ embeds: [notificationEmbed], components: [row] });

@@ -2,7 +2,8 @@ const { EventEmitter } = require('node:events');
 const path = require('node:path');
 const simpleGit = require('simple-git');
 
-const UPDATE_BUTTON_ID = 'git-update-confirm';
+const UPDATE_CONFIRM_BUTTON_ID = 'git-update-confirm';
+const UPDATE_DECLINE_BUTTON_ID = 'git-update-decline';
 
 class GitMonitor extends EventEmitter {
   constructor({ repoPath = process.cwd(), intervalMinutes = 5, logger }) {
@@ -66,6 +67,7 @@ class GitMonitor extends EventEmitter {
   }
 }
 
-GitMonitor.UPDATE_BUTTON_ID = UPDATE_BUTTON_ID;
+GitMonitor.UPDATE_CONFIRM_BUTTON_ID = UPDATE_CONFIRM_BUTTON_ID;
+GitMonitor.UPDATE_DECLINE_BUTTON_ID = UPDATE_DECLINE_BUTTON_ID;
 
 module.exports = GitMonitor;
