@@ -27,7 +27,8 @@ function createEmbed(options = {}) {
   }
 
   if (timestamp) {
-    embed.setTimestamp(new Date());
+    const resolved = timestamp === true ? new Date() : timestamp;
+    embed.setTimestamp(resolved);
   }
 
   return embed;

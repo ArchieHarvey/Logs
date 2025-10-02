@@ -9,6 +9,11 @@ const { createEmbed } = require('../util/replies');
 const GitMonitor = require('../services/gitMonitor');
 const { GUILD_RELOAD_BUTTON_ID, GLOBAL_RELOAD_BUTTON_ID } = require('../commands/common/reloadCommands');
 const { isOwner } = require('../util/owners');
+const {
+  parseCustomId: parsePowerCustomId,
+  resolvePowerSession,
+  cancelPowerSession,
+} = require('../commands/common/power');
 
 function disableInteractionButtons(message) {
   if (!message?.components?.length) {
@@ -138,6 +143,66 @@ module.exports = ({ client, logger, slashCommands, gitMonitor, requestRestart, u
     if (interaction.customId === GLOBAL_RELOAD_BUTTON_ID) {
       await interaction.reply({
         content: 'Global reloads are currently disabled.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const powerAction = parsePowerCustomId(interaction.customId);
+    if (powerAction) {
+      if (!isOwner(interaction.user.id)) {
+        await interaction.reply({
+          content: 'Only bot owners can manage power controls.',
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (powerAction.decision === 'confirm') {
+        const resolution = await resolvePowerSession(powerAction.sessionId, {
+          approved: true,
+          actor: interaction.user,
+          client: interaction.client,
+        });
+
+        if (resolution?.error === 'expired') {
+          await interaction.reply({
+            content: 'This power action request has already expired.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        if (resolution?.error) {
+          await interaction.reply({
+            content: 'This power action request could not be found.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        await interaction.reply({
+          embeds: [resolution.embed],
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      const cancellation = await cancelPowerSession(powerAction.sessionId, {
+        actor: interaction.user,
+        reason: `Cancelled by ${interaction.user.tag}.`,
+      });
+
+      if (cancellation?.error) {
+        await interaction.reply({
+          content: 'This power action request has already been resolved.',
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      await interaction.reply({
+        embeds: [cancellation.embed],
         flags: MessageFlags.Ephemeral,
       });
       return;

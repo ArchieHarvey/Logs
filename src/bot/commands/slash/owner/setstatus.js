@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const { createEmbed } = require('../../util/replies');
-const { isOwner } = require('../../util/owners');
+const { createEmbed } = require('../../../util/replies');
+const { isOwner } = require('../../../util/owners');
 const {
   PRESENCE_STATUSES,
   ACTIVITY_TYPES,
@@ -8,7 +8,7 @@ const {
   normalizePresence,
   applyPresence,
   savePresence,
-} = require('../common/presence');
+} = require('../../common/presence');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -32,6 +32,8 @@ module.exports = {
         .setDescription('Activity text (e.g. Playing __).')
         .setMaxLength(128)
     ),
+  category: 'owner',
+  ownerOnly: true,
   async execute(interaction) {
     if (!isOwner(interaction.user.id)) {
       await interaction.reply({

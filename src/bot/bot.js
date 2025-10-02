@@ -35,6 +35,8 @@ class Bot extends EventEmitter {
     this.client.commandPrefix = this.config.commandPrefix;
     this.client.textCommands = this.textCommands;
     this.client.slashCommands = this.slashCommands;
+    this.client.requestRestart = () => this.emit('restartRequested');
+    this.client.requestShutdown = () => this.emit('shutdownRequested');
 
     this.gitMonitor = new GitMonitor({
       repoPath: process.cwd(),

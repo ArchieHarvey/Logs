@@ -1,6 +1,28 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+function discoverCommandFiles(directory) {
+  const discovered = [];
+  const entries = fs.readdirSync(directory, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const entryPath = path.join(directory, entry.name);
+
+    if (entry.isDirectory()) {
+      discovered.push(...discoverCommandFiles(entryPath));
+      continue;
+    }
+
+    if (!entry.isFile() || !entry.name.endsWith('.js')) {
+      continue;
+    }
+
+    discovered.push(entryPath);
+  }
+
+  return discovered;
+}
+
 function loadCommands(directory) {
   const commands = new Map();
 
@@ -8,10 +30,9 @@ function loadCommands(directory) {
     return commands;
   }
 
-  const files = fs.readdirSync(directory).filter((file) => file.endsWith('.js'));
+  const files = discoverCommandFiles(directory);
 
-  for (const file of files) {
-    const filepath = path.join(directory, file);
+  for (const filepath of files) {
     delete require.cache[require.resolve(filepath)];
     const command = require(filepath);
 
@@ -32,10 +53,9 @@ function loadSlashCommands(directory) {
     return commands;
   }
 
-  const files = fs.readdirSync(directory).filter((file) => file.endsWith('.js'));
+  const files = discoverCommandFiles(directory);
 
-  for (const file of files) {
-    const filepath = path.join(directory, file);
+  for (const filepath of files) {
     delete require.cache[require.resolve(filepath)];
     const command = require(filepath);
 

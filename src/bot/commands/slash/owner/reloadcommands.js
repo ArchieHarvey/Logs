@@ -1,12 +1,14 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const { createEmbed } = require('../../util/replies');
-const { isOwner } = require('../../util/owners');
-const { buildReloadActionRow } = require('../common/reloadCommands');
+const { createEmbed } = require('../../../util/replies');
+const { isOwner } = require('../../../util/owners');
+const { buildReloadActionRow } = require('../../common/reloadCommands');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('reloadcommands')
     .setDescription('Reload the bot\'s slash commands.'),
+  category: 'owner',
+  ownerOnly: true,
   async execute(interaction) {
     if (!isOwner(interaction.user.id)) {
       await interaction.reply({

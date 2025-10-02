@@ -28,6 +28,11 @@ const RESTART_CODE = 5;
     await shutdown(RESTART_CODE);
   });
 
+  bot.on('shutdownRequested', async () => {
+    logger.info('Shutdown requested. Stopping bot without restart.');
+    await shutdown(0);
+  });
+
   process.on('SIGINT', () => shutdown(0));
   process.on('SIGTERM', () => shutdown(0));
 
