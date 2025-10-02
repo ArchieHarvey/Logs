@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const simpleGit = require('simple-git');
 const path = require('node:path');
 const { createEmbed } = require('../../util/replies');
@@ -8,7 +8,7 @@ module.exports = {
     .setName('gitstatus')
     .setDescription('Show the current Git synchronization status.'),
   async execute(interaction) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
       const git = simpleGit({ baseDir: path.resolve(process.cwd()) });
