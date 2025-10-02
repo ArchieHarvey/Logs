@@ -230,7 +230,7 @@ class Bot extends EventEmitter {
       logger.error('Failed to connect to MongoDB during startup:', error);
     }
 
-    this.client.once('clientReady', () => {
+    this.client.once('ready', () => {
       if (this.config.updateChannelId) {
         this.gitMonitor.start();
       } else {
