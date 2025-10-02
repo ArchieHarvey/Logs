@@ -119,13 +119,11 @@ class Bot extends EventEmitter {
         const confirmButton = new ButtonBuilder()
           .setCustomId(GitMonitor.UPDATE_CONFIRM_BUTTON_ID)
           .setLabel('Apply Update & Restart')
-          .setEmoji('✅')
           .setStyle(ButtonStyle.Success);
 
         const declineButton = new ButtonBuilder()
           .setCustomId(GitMonitor.UPDATE_DECLINE_BUTTON_ID)
           .setLabel('Dismiss')
-          .setEmoji('🚫')
           .setStyle(ButtonStyle.Secondary);
 
         const row = new ActionRowBuilder().addComponents(confirmButton, declineButton);

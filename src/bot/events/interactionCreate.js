@@ -1,6 +1,36 @@
-const { PermissionFlagsBits } = require('discord.js');
+const {
+  PermissionFlagsBits,
+  MessageFlags,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ComponentType,
+} = require('discord.js');
 const { createEmbed } = require('../util/replies');
 const GitMonitor = require('../services/gitMonitor');
+
+function disableInteractionButtons(message) {
+  if (!message?.components?.length) {
+    return null;
+  }
+
+  let hasButton = false;
+  const disabledRows = message.components.map((row) => {
+    const disabledRow = ActionRowBuilder.from(row);
+    disabledRow.setComponents(
+      disabledRow.components.map((component) => {
+        if (component.data?.type !== ComponentType.Button) {
+          return component;
+        }
+
+        hasButton = true;
+        return ButtonBuilder.from(component).setDisabled(true);
+      }),
+    );
+    return disabledRow;
+  });
+
+  return hasButton ? disabledRows : null;
+}
 
 module.exports = ({ client, logger, slashCommands, gitMonitor, requestRestart, updateChannelId, clearUpdatePrompt }) => {
   client.on('interactionCreate', async (interaction) => {
@@ -18,7 +48,7 @@ module.exports = ({ client, logger, slashCommands, gitMonitor, requestRestart, u
           title: 'Command error',
           description: 'There was an error while executing this command.',
         });
-        const replyContent = { embeds: [errorEmbed], ephemeral: true };
+        const replyContent = { embeds: [errorEmbed], flags: MessageFlags.Ephemeral };
 
         if (interaction.replied || interaction.deferred) {
           await interaction.followUp(replyContent);
@@ -53,12 +83,12 @@ module.exports = ({ client, logger, slashCommands, gitMonitor, requestRestart, u
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp({
           embeds: [permissionEmbed],
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       } else {
         await interaction.reply({
           embeds: [permissionEmbed],
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
@@ -87,14 +117,23 @@ module.exports = ({ client, logger, slashCommands, gitMonitor, requestRestart, u
             color: 0xffa500,
           }),
         ],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
 
       clearUpdatePrompt?.();
       return;
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    try {
+      const disabledComponents = disableInteractionButtons(interaction.message);
+      if (disabledComponents) {
+        await interaction.message.edit({ components: disabledComponents });
+      }
+    } catch (error) {
+      logger.warn('Failed to disable update buttons after confirmation:', error);
+    }
 
     try {
       const { pullResult, pushResult } = await gitMonitor.applyRemoteUpdates();
