@@ -16,6 +16,7 @@ const config = {
   commandPrefix: process.env.COMMAND_PREFIX || '!',
   gitPollIntervalMinutes: numberFromEnv(process.env.GIT_POLL_INTERVAL_MINUTES, 5),
   mongoUri: process.env.MONGODB_URI || '',
+  ownerManagerId: process.env.BOT_OWNER_MANAGER_ID || '',
   ownerIds: (process.env.BOT_OWNER_IDS || '')
     .split(',')
     .map((id) => id.trim())
