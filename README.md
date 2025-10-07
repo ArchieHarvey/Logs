@@ -10,6 +10,7 @@ This project provides a Discord bot written in JavaScript (Node.js) that support
 - **GitHub update monitor** that checks for new commits on the upstream branch and announces them in a fixed channel.
 - **One-click updates**: authorised users can confirm the update via a button, triggering `git pull`, `git push`, and a clean restart of the bot worker.
 - **MongoDB integration** with a reusable connection service and owner-only command to audit database health.
+- **Owner management** via MongoDB-backed slash and text commands restricted to a designated manager.
 - **Structured codebase** with clear separation of configuration, commands, events, services, and utilities.
 
 ## Getting started
@@ -45,7 +46,8 @@ This project provides a Discord bot written in JavaScript (Node.js) that support
    - `COMMAND_PREFIX`: Prefix for text commands (defaults to `!`).
    - `GIT_POLL_INTERVAL_MINUTES`: How often to poll for remote changes (defaults to 5 minutes).
    - `MONGODB_URI`: (Optional) MongoDB connection string used by the bot's database service.
-   - `BOT_OWNER_IDS`: Comma-separated Discord user IDs that should have access to owner-only commands (e.g. `/mongostats`).
+   - `BOT_OWNER_MANAGER_ID`: Discord user ID allowed to add or remove owners at runtime via `/owners` or `!owners`.
+   - `BOT_OWNER_IDS`: (Optional) Comma-separated Discord user IDs to seed as additional owners on first run.
 
 4. Deploy slash commands (run again whenever slash commands change):
 
@@ -85,8 +87,9 @@ src/
 ## MongoDB monitoring
 
 - Provide a MongoDB connection string via `MONGODB_URI` to enable the built-in database service.
-- Populate `BOT_OWNER_IDS` with the Discord user IDs that should have access to owner tooling.
+- (Optional) Populate `BOT_OWNER_IDS` with any Discord user IDs that should start with owner access.
 - Use the `/mongostats` slash command (owner-only) to verify connectivity, latency, and basic database metrics at runtime.
+- Configure `BOT_OWNER_MANAGER_ID` so that user can run `/owners` or `!owners` to review, add, or remove owners without restarting the bot.
 
 ## Adding commands
 
@@ -100,10 +103,12 @@ src/
 |---------|-------|-------------|
 | `!help` | Text  | Display the unified help menu with all commands. |
 | `!ping` | Text  | Check the bot's responsiveness. |
+| `!owners` | Text | Designated manager command to list, add, or remove bot owners (MongoDB required). |
 | `/help` | Slash | Display the unified help menu with all commands. |
 | `/ping` | Slash | Check the bot's responsiveness and latency. |
 | `/gitstatus` | Slash | Show the current Git status and pending updates. |
 | `/mongostats` | Slash | Owner-only command that validates MongoDB connectivity and displays database metrics. |
+| `/owners` | Slash | Designated manager command to list, add, or remove bot owners (MongoDB required). |
 
 ## License
 

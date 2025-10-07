@@ -1,4 +1,5 @@
 const { fetchStoredPresence, applyPresence, buildPresenceDescription } = require('../commands/common/presence');
+const { syncOwnersFromDatabase } = require('../util/owners');
 
 module.exports = ({ client, logger, slashCommands, mongoService }) => {
   client.once('clientReady', async () => {
@@ -7,6 +8,16 @@ module.exports = ({ client, logger, slashCommands, mongoService }) => {
 
     if (!mongoService) {
       return;
+    }
+
+    if (mongoService?.isConfigured?.()) {
+      try {
+        const ownerIds = await syncOwnersFromDatabase(mongoService);
+        const ownerCount = ownerIds.length;
+        logger.info(`Loaded ${ownerCount} owner ${ownerCount === 1 ? 'ID' : 'IDs'} from MongoDB.`);
+      } catch (error) {
+        logger.warn(`Failed to synchronize owner IDs from MongoDB: ${error.message}`);
+      }
     }
 
     try {
