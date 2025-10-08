@@ -1,9 +1,10 @@
-const { replyWithEmbed } = require('../../util/replies');
-const { buildLatencyEmbed } = require('../../util/ping');
+const { replyWithEmbed } = require('../../../util/replies');
+const { buildLatencyEmbed } = require('../../../util/ping');
 
 module.exports = {
   name: 'ping',
   description: "Check the bot's latency.",
+  category: 'utility',
   async execute({ message }) {
     const sent = await replyWithEmbed(message, {
       description: 'Pinging... ⏱️',

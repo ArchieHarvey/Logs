@@ -1,11 +1,12 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const { buildMongoStatusReport } = require('../common/mongoStats');
-const { isOwner } = require('../../util/owners');
+const { buildMongoStatusReport } = require('../../common/mongoStats');
+const { isOwner } = require('../../../util/owners');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('mongostats')
     .setDescription('Check the MongoDB connection status and database statistics.'),
+  category: 'owner',
   async execute(interaction) {
     if (!isOwner(interaction.user.id)) {
       await interaction.reply({

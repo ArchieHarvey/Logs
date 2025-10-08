@@ -1,11 +1,12 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { createEmbed } = require('../../util/replies');
-const { buildLatencyEmbed } = require('../../util/ping');
+const { createEmbed } = require('../../../util/replies');
+const { buildLatencyEmbed } = require('../../../util/ping');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('ping')
     .setDescription('Check the bot\'s latency.'),
+  category: 'utility',
   async execute(interaction) {
     const sent = await interaction.reply({
       embeds: [createEmbed({ description: 'Pinging... ⏱️' })],

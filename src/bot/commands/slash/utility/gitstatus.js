@@ -1,11 +1,12 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const { buildGitStatusEmbed } = require('../common/gitStatus');
-const { createEmbed } = require('../../util/replies');
+const { buildGitStatusEmbed } = require('../../common/gitStatus');
+const { createEmbed } = require('../../../util/replies');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('gitstatus')
     .setDescription('Show the current Git synchronization status.'),
+  category: 'utility',
   async execute(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 

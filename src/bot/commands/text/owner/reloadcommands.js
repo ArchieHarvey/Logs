@@ -1,10 +1,11 @@
-const { replyWithEmbed, createEmbed } = require('../../util/replies');
-const { isOwner } = require('../../util/owners');
-const { buildReloadActionRow } = require('../common/reloadCommands');
+const { replyWithEmbed, createEmbed } = require('../../../util/replies');
+const { isOwner } = require('../../../util/owners');
+const { buildReloadActionRow } = require('../../common/reloadCommands');
 
 module.exports = {
   name: 'reloadcommands',
   description: 'Reload the bot\'s slash commands for this guild.',
+  category: 'owner',
   async execute({ message }) {
     if (!isOwner(message.author.id)) {
       await replyWithEmbed(message, {

@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const { createEmbed } = require('../../util/replies');
+const { createEmbed } = require('../../../util/replies');
 const {
   isOwnerManager,
   ownerManagerId,
@@ -9,7 +9,7 @@ const {
   getOwnerIds,
   formatOwnerList,
   parseUserIdInput,
-} = require('../../util/owners');
+} = require('../../../util/owners');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -38,6 +38,7 @@ module.exports = {
     .addSubcommand((subcommand) =>
       subcommand.setName('list').setDescription('Display all Discord user IDs with owner access.'),
     ),
+  category: 'owner',
   async execute(interaction) {
     if (!ownerManagerId) {
       await interaction.reply({
