@@ -4,11 +4,13 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ComponentType,
+  StringSelectMenuBuilder,
 } = require('discord.js');
 const { createEmbed } = require('../util/replies');
 const GitMonitor = require('../services/gitMonitor');
 const { GUILD_RELOAD_BUTTON_ID, GLOBAL_RELOAD_BUTTON_ID } = require('../commands/common/reloadCommands');
 const { isOwner } = require('../util/owners');
+const { HELP_MENU_CUSTOM_ID, HELP_MENU_OVERVIEW_VALUE, buildHelpMenu } = require('../util/help');
 
 function disableInteractionButtons(message) {
   if (!message?.components?.length) {
@@ -58,6 +60,42 @@ module.exports = ({ client, logger, slashCommands, gitMonitor, requestRestart, u
           await interaction.reply(replyContent);
         }
       }
+      return;
+    }
+
+    if (interaction.isStringSelectMenu()) {
+      if (interaction.customId !== HELP_MENU_CUSTOM_ID) {
+        return;
+      }
+
+      const menu = buildHelpMenu({
+        prefix: interaction.client?.commandPrefix,
+        textCommands: interaction.client?.textCommands,
+        slashCommands: interaction.client?.slashCommands,
+      });
+
+      const selectedValue = interaction.values?.[0] ?? HELP_MENU_OVERVIEW_VALUE;
+      const embedKey = menu.embedsByValue.has(selectedValue) ? selectedValue : menu.overviewValue;
+      const embed = menu.embedsByValue.get(embedKey) ?? menu.embedsByValue.get(menu.overviewValue);
+
+      if (!menu.options.length) {
+        await interaction.update({ embeds: [embed], components: [] });
+        return;
+      }
+
+      const options = menu.options.map((option) => ({
+        ...option,
+        default: option.value === embedKey,
+      }));
+
+      const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId(menu.customId)
+        .setPlaceholder(menu.placeholder)
+        .addOptions(options);
+
+      const components = [new ActionRowBuilder().addComponents(selectMenu)];
+
+      await interaction.update({ embeds: [embed], components });
       return;
     }
 

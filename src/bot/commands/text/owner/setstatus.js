@@ -5,8 +5,8 @@ const {
   ComponentType,
   StringSelectMenuBuilder,
 } = require('discord.js');
-const { createEmbed, replyWithEmbed } = require('../../util/replies');
-const { isOwner } = require('../../util/owners');
+const { createEmbed, replyWithEmbed } = require('../../../util/replies');
+const { isOwner } = require('../../../util/owners');
 const {
   PRESENCE_STATUSES,
   ACTIVITY_TYPES,
@@ -15,7 +15,7 @@ const {
   normalizePresence,
   applyPresence,
   savePresence,
-} = require('../common/presence');
+} = require('../../common/presence');
 
 const CUSTOM_IDS = {
   STATUS_BUTTON: 'setstatus:status-button',
@@ -130,6 +130,7 @@ function buildActivityTypeSelect(currentType) {
 module.exports = {
   name: 'setstatus',
   description: 'Interactively update the bot\'s presence.',
+  category: 'owner',
   async execute({ message }) {
     if (!isOwner(message.author.id)) {
       await replyWithEmbed(message, {

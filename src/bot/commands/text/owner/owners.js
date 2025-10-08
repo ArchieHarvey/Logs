@@ -1,4 +1,4 @@
-const { createEmbed, replyWithEmbed } = require('../../util/replies');
+const { createEmbed, replyWithEmbed } = require('../../../util/replies');
 const {
   ownerManagerId,
   isOwnerManager,
@@ -8,7 +8,7 @@ const {
   removeOwner,
   formatOwnerList,
   parseUserIdInput,
-} = require('../../util/owners');
+} = require('../../../util/owners');
 
 const EMBED_COLORS = {
   info: 0x5865f2,
@@ -21,6 +21,7 @@ module.exports = {
   name: 'owners',
   description: 'Manage the list of bot owners (restricted to the owner manager).',
   usage: '!owners <list|add|remove> [user]',
+  category: 'owner',
   async execute({ message, args }) {
     if (!ownerManagerId) {
       await replyWithEmbed(message, {

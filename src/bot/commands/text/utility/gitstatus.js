@@ -1,9 +1,10 @@
-const { replyWithEmbed } = require('../../util/replies');
-const { buildGitStatusEmbed } = require('../common/gitStatus');
+const { replyWithEmbed } = require('../../../util/replies');
+const { buildGitStatusEmbed } = require('../../common/gitStatus');
 
 module.exports = {
   name: 'gitstatus',
   description: 'Show the current Git synchronization status.',
+  category: 'utility',
   async execute({ message }) {
     try {
       const embed = await buildGitStatusEmbed();
